@@ -45,22 +45,22 @@
 #![allow(clippy::upper_case_acronyms)]
 
 // TODO: remove
+#![allow(dead_code)]
 #![allow(missing_docs)]
+#![allow(clippy::cargo)]
 #![allow(clippy::missing_docs_in_private_items)]
 
+#![feature(macro_metavar_expr)]
+
+pub mod ast;
+pub mod error;
 pub mod grammar;
 
-use ::std::path::Path;
+use crate::error::Result;
 
-use ::codespan_reporting::diagnostic::Severity;
-use ::codespan_reporting::files::SimpleFile;
-use ::codespan_reporting::term::{self, Config};
-use ::codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
-use ::color_eyre::{eyre::eyre, Report, Result};
-use ::logos::Logos;
-use ::tracing_subscriber::EnvFilter;
+use std::path::Path;
 
-use crate::grammar::{tokenize, Cst, Parser, Token};
+use tracing_subscriber::EnvFilter;
 
 fn setup() -> Result<()> {
     color_eyre::install()?;
@@ -72,28 +72,8 @@ fn setup() -> Result<()> {
     Ok(())
 }
 
-fn parse<'src>(path: &Path, source: &'src str) -> Result<Cst<'src>> {
-    let mut diags = vec![];
 
-    let (tokens, ranges) = tokenize(Token::lexer(source), &mut diags);
-    let cst = Parser::parse(source, tokens, ranges, &mut diags);
-
-    let config = Config::default();
-    let writer = StandardStream::stderr(ColorChoice::Auto);
-    let file   = SimpleFile::new(format!("{}", path.display()), &source);
-
-    for diag in &diags {
-        term::emit(&mut writer.lock(), &config, &file, diag).unwrap();
-    }
-
-    if diags.iter().any(|diag| diag.severity >= Severity::Error) {
-        return Err(eyre!("{} was unable to be parsed", path.display()))
-    }
-
-    Ok(cst)
-}
-
-fn main() -> Result<(), Report> {
+fn main() -> Result<()> {
     setup()?;
 
     let args: Vec<String> = std::env::args().collect();
@@ -101,11 +81,12 @@ fn main() -> Result<(), Report> {
         std::process::exit(1);
     }
 
-    let path   = Path::new(&args[1]);
-    let source = std::fs::read_to_string(path)?;
-    let cst    = parse(path, &source)?;
+    let path    = Path::new(&args[1]);
+    let source  = std::fs::read_to_string(path)?;
+    let cst     = grammar::parse(&source)?;
+    let ast     = ast::consume(cst)?;
 
-    println!("{cst}");
+    dbg!(&ast);
 
     Ok(())
 }

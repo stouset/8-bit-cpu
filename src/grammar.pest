@@ -1,0 +1,33 @@
+char     = { ASCII_ALPHA | "_" }
+digit    = { ASCII_DIGIT }
+nonzero  = { ASCII_NONZERO_DIGIT }
+zero     = { "0" }
+digits   = @{ (nonzero ~ digit*) | zero }
+number   = @{ ("+" | "-")? ~digits }
+newline  = _{ NEWLINE }
+
+identifier = _{ char ~ (char | digit )+ }
+label      = @{ identifier }
+command    = @{ identifier }
+mnemonic   = @{ identifier }
+register   = @{ identifier }
+literal    = _{ label | number }
+
+argument  = _{ label | number }
+arguments =  { argument ~ ("," ~ argument)* | argument? }
+
+target   = _{ register | "#" ~ literal }
+direct   =  { target }
+indirect =  { "[" ~ target ~ "]" }
+operand  = _{ direct | indirect }
+operands =  { operand ~ ("," ~ operand)* | operand? }
+
+directive   = { "." ~ command ~ arguments }
+instruction = { (label ~ ":" ~ newline?)? ~ mnemonic ~ operands }
+
+statement = _{ (directive | instruction) ~ newline+ }
+
+program = _{ SOI ~ newline* ~ statement* ~ EOI }
+
+WHITESPACE = _{ " " | "\t" }
+COMMENT    = _{ ";" ~ (!"\n" ~ ANY)* }
