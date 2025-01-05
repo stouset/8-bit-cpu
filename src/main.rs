@@ -50,27 +50,62 @@
 
 pub mod grammar;
 
-use codespan_reporting::files::SimpleFile;
-use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
-use codespan_reporting::term::{self, Config};
-use logos::Logos;
-use grammar::{tokenize, Parser, Token};
+use ::std::path::Path;
 
-fn main() -> std::io::Result<()> {
+use ::codespan_reporting::diagnostic::Severity;
+use ::codespan_reporting::files::SimpleFile;
+use ::codespan_reporting::term::{self, Config};
+use ::codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
+use ::color_eyre::{eyre::eyre, Report, Result};
+use ::logos::Logos;
+use ::tracing_subscriber::EnvFilter;
+
+use crate::grammar::{tokenize, Cst, Parser, Token};
+
+fn setup() -> Result<()> {
+    color_eyre::install()?;
+
+    tracing_subscriber::fmt::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
+    Ok(())
+}
+
+fn parse<'src>(path: &Path, source: &'src str) -> Result<Cst<'src>> {
+    let mut diags = vec![];
+
+    let (tokens, ranges) = tokenize(Token::lexer(source), &mut diags);
+    let cst = Parser::parse(source, tokens, ranges, &mut diags);
+
+    let config = Config::default();
+    let writer = StandardStream::stderr(ColorChoice::Auto);
+    let file   = SimpleFile::new(format!("{}", path.display()), &source);
+
+    for diag in &diags {
+        term::emit(&mut writer.lock(), &config, &file, diag).unwrap();
+    }
+
+    if diags.iter().any(|diag| diag.severity >= Severity::Error) {
+        return Err(eyre!("{} was unable to be parsed", path.display()))
+    }
+
+    Ok(cst)
+}
+
+fn main() -> Result<(), Report> {
+    setup()?;
+
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
         std::process::exit(1);
     }
-    let source = std::fs::read_to_string(&args[1])?;
-    let mut diags = vec![];
-    let (tokens, ranges) = tokenize(Token::lexer(&source), &mut diags);
-    let cst = Parser::parse(&source, tokens, ranges, &mut diags);
+
+    let path   = Path::new(&args[1]);
+    let source = std::fs::read_to_string(path)?;
+    let cst    = parse(path, &source)?;
+
     println!("{cst}");
-    let writer = StandardStream::stderr(ColorChoice::Auto);
-    let config = Config::default();
-    let file = SimpleFile::new(&args[1], &source);
-    for diag in &diags {
-        term::emit(&mut writer.lock(), &config, &file, diag).unwrap();
-    }
+
     Ok(())
 }

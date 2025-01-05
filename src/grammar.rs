@@ -1,3 +1,5 @@
+pub mod ast;
+
 #[allow(warnings)]
 pub mod parser;
 
