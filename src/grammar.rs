@@ -1,3 +1,4 @@
-pub(crate) mod parser;
+#[allow(warnings)]
+pub mod parser;
 
-pub(crate) use parser::*;
+pub use parser::*;
